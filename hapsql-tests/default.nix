@@ -10,8 +10,21 @@
 
       services.hapsql = {
         enable = true;
-        nodeIp = "10.0.2.15";
-        partners = [ "10.0.2.16" "10.0.2.17" ];
+        nodeIp = "192.168.1.1";
+        partners = [ "192.168.1.2" ];
+        postgresqlPackage = pkgs.postgresql_15;
+      };
+    };
+    node2 = { config, pkgs, ... }: {
+      imports = [ ../modules/hapsql.nix ];
+
+      environment.systemPackages =
+        builtins.attrValues { inherit (pkgs) curl nettools; };
+
+      services.hapsql = {
+        enable = true;
+        nodeIp = "192.168.1.2";
+        partners = [ "192.168.1.1" ];
         postgresqlPackage = pkgs.postgresql_15;
       };
     };
