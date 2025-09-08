@@ -2,45 +2,51 @@
   name = "Echo Service Test Z";
 
   nodes = {
-    node1 = { config, pkgs, ... }: {
+    psqlnode1 = { config, pkgs, ... }: {
       imports = [ ../modules/hapsql.nix ];
+
+      users.users.root.password = "root";
+      services.getty.autologinUser = "root";
 
       environment.systemPackages =
         builtins.attrValues { inherit (pkgs) curl nettools; };
 
       services.hapsql = {
         enable = true;
-        nodeIp = "192.168.1.1";
-        partners = [ "192.168.1.2" ];
+        nodeIp = "psqlnode1";
+        partners = [ "psqlnode2" ];
         postgresqlPackage = pkgs.postgresql_15;
       };
     };
-    node2 = { config, pkgs, ... }: {
+    psqlnode2 = { config, pkgs, ... }: { # TODO: parametrize this config so we don't repeat ourselves as much
       imports = [ ../modules/hapsql.nix ];
+
+      users.users.root.password = "root";
+      services.getty.autologinUser = "root";
 
       environment.systemPackages =
         builtins.attrValues { inherit (pkgs) curl nettools; };
 
       services.hapsql = {
         enable = true;
-        nodeIp = "192.168.1.2";
-        partners = [ "192.168.1.1" ];
+        nodeIp = "psqlnode2";
+        partners = [ "psqlnode1" ];
         postgresqlPackage = pkgs.postgresql_15;
       };
     };
   };
 
-  # interactive.sshBackdoor.enable = true;
-  # enableDebugHook = true;
-
-  # globalTimeout = 200;
-
-  # interactive.nodes.server = import ../debug-host-module.nix;
-
   testScript = { nodes, ... }: ''
-
-    PATRONI_PORT = "8008"
-
     start_all()
+
+    for node in [ psqlnode1, psqlnode2 ]:
+        node.systemctl("start network-online.target")
+        node.wait_for_unit("network-online.target")
+        node.wait_for_unit("patroni.service")
+
+    psqlnode1.succeed("ping -c 1 psqlnode2")
+    psqlnode2.succeed("ping -c 1 psqlnode1")
+
+    # TODO: Test posgres service connectivity between nodes and stuff
   '';
 }
