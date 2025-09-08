@@ -10,8 +10,8 @@
 
       services.hapsql = {
         enable = true;
-        nodeIp = "10.0.2.15";
-        partners = [ "10.0.2.16" "10.0.2.17" ];
+        nodeIp = "192.168.1.1";
+        partners = [ "192.168.1.2" ];
         postgresqlPackage = pkgs.postgresql_15;
       };
     };
@@ -23,8 +23,8 @@
 
       services.hapsql = {
         enable = true;
-        nodeIp = "10.0.2.16";
-        partners = [ "10.0.2.15" "10.0.2.17" ];
+        nodeIp = "192.168.1.2";
+        partners = [ "192.168.1.1" ];
         postgresqlPackage = pkgs.postgresql_15;
       };
     };
