@@ -17,12 +17,19 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        config = import config { inherit config; };
 
         # Choose version of PostgreSQL
         postgres = pkgs.postgresql_15;
 
       in
       {
+        packages = {
+          testing = pkgs.testers.runNixOSTest ./testing;
+        };
+        checks = config.packages // {
+            testing-interactive = config.packages.testing.driverInteractive;
+          };
         devShells.default = pkgs.mkShell {
           name = "plpgsql-dev";
 
@@ -60,6 +67,5 @@
           )
         ];
       };
-
     };
 }
