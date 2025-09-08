@@ -414,3 +414,4 @@ nix run mylib
 * *Report bugs* If you find a bug, please [open an issue](https://github.com/torstenboettjer/flake_psql/issues/new) with a clear description of the problem.
 * *Fix bugs* If you know how to fix a bug, submit a [pull request](https://github.com/torstenboettjer/flake_psql/pull/new) with your changes.
 * *Improve documentation* If you find the documentation lacking, you can contribute improvements by editing the relevant files.
+
