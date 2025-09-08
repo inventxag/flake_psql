@@ -1,20 +1,14 @@
 {
-  description = "PL/pgSQL development flake with PostgreSQL client and optional server";
+  description =
+    "PL/pgSQL development flake with PostgreSQL client and optional server";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      flake-utils,
-      ...
-    }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
+  outputs = { self, nixpkgs, flake-utils, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
         config = import config { inherit config; };
@@ -22,14 +16,11 @@
         # Choose version of PostgreSQL
         postgres = pkgs.postgresql_15;
 
-      in
-      {
-        packages = {
-          testing = pkgs.testers.runNixOSTest ./testing;
-        };
+      in {
+        packages = { hapsql-tests = pkgs.testers.runNixOSTest ./hapsql-tests; };
         checks = config.packages // {
-            testing-interactive = config.packages.testing.driverInteractive;
-          };
+          hapsql-tests-interactive = config.packages.hapsql-tests.driverInteractive;
+        };
         devShells.default = pkgs.mkShell {
           name = "plpgsql-dev";
 
@@ -49,23 +40,16 @@
             export PGPORT=5433
           '';
         };
-      }
-    )
-    // {
-      nixosModules = {
-        hapsql = ./modules/hapsql.nix;
-      };
-      nixosConfigurations.node1 = nixpkgs.lib.nixosSystem {
-        modules = [
-          ./node.nix
-          self.nixosModules.hapsql
-          (
-            { pkgs, ... }:
-            {
+      }) // {
+        nixosModules = { hapsql = ./modules/hapsql.nix; };
+        nixosConfigurations.node1 = nixpkgs.lib.nixosSystem {
+          modules = [
+            ./node.nix
+            self.nixosModules.hapsql
+            ({ pkgs, ... }: {
               services.hapsql.postgresqlPackage = pkgs.postgresql_15;
-            }
-          )
-        ];
+            })
+          ];
+        };
       };
-    };
 }

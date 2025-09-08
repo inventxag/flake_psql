@@ -15,6 +15,19 @@
         postgresqlPackage = pkgs.postgresql_15;
       };
     };
+    node2 = { config, pkgs, ... }: {
+      imports = [ ../modules/hapsql.nix ];
+
+      environment.systemPackages =
+        builtins.attrValues { inherit (pkgs) curl nettools; };
+
+      services.hapsql = {
+        enable = true;
+        nodeIp = "10.0.2.16";
+        partners = [ "10.0.2.15" "10.0.2.17" ];
+        postgresqlPackage = pkgs.postgresql_15;
+      };
+    };
   };
 
   # interactive.sshBackdoor.enable = true;
