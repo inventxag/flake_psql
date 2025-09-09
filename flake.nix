@@ -12,6 +12,34 @@
   };
 
   outputs = { self, nixpkgs, flake-utils, nixos-generators, ... }:
+    let
+      # Helper function to generate a NixOS configuration for a node.
+      mkNode = nodeSpecificConfig: nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./node.nix
+          nodeSpecificConfig
+          self.nixosModules.hapsql
+          self.nixosModules.ssh-config
+          ({ pkgs, ... }: {
+            services.hapsql.postgresqlPackage = pkgs.postgresql_15;
+          })
+        ];
+      };
+
+      # Helper function to generate a VM image from a NixOS configuration.
+      mkVM = nodeConfig: nixos-generators.nixosGenerate {
+        system = "x86_64-linux";
+        format = "qcow";
+        modules = nodeConfig._module.args.modules ++ [
+          {
+            nix.registry.nixpkgs.flake = nixpkgs;
+            virtualisation.diskSize = 20 * 1024;
+          }
+        ];
+      };
+
+    in
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -21,7 +49,28 @@
         postgres = pkgs.postgresql_15;
 
       in {
-        packages = { hapsql-tests = pkgs.testers.runNixOSTest ./hapsql-tests; };
+        packages = {
+          hapsql-tests = pkgs.testers.runNixOSTest ./hapsql-tests;
+          vm1 = mkVM self.nixosConfigurations.node1vm;
+          vm2 = mkVM self.nixosConfigurations.node2vm;
+          vm3 = mkVM self.nixosConfigurations.node3vm;
+
+          # This package builds all VM images at once
+          vms = pkgs.symlinkJoin {
+            name = "all-vms";
+            paths = [
+              self.packages.${system}.vm1
+              self.packages.${system}.vm2
+              self.packages.${system}.vm3
+            ];
+            postBuild = ''
+              mkdir -p $out
+              ln -s ${self.packages.${system}.vm1}/nixos.qcow2 $out/vm1.qcow2
+              ln -s ${self.packages.${system}.vm2}/nixos.qcow2 $out/vm2.qcow2
+              ln -s ${self.packages.${system}.vm3}/nixos.qcow2 $out/vm3.qcow2
+            '';
+          };
+        };
         checks = config.packages // {
           hapsql-tests-interactive = config.packages.hapsql-tests.driverInteractive;
         };
@@ -50,34 +99,16 @@
           ssh-config = ./modules/ssh-config.nix;
         };
 
-        nixosConfigurations.node1 = nixpkgs.lib.nixosSystem {
-          modules = [
-            ./node.nix
-            self.nixosModules.hapsql
-            self.nixosModules.ssh-config
-            ({ pkgs, ... }: {
-              services.hapsql.postgresqlPackage = pkgs.postgresql_15;
-            })
-          ];
+        nixosConfigurations = {
+          node1 = mkNode ./node-configs/node1-qemu.nix;
+          node2 = mkNode ./node-configs/node2-qemu.nix;
+          node3 = mkNode ./node-configs/node3-qemu.nix;
         };
 
-        vm = nixos-generators.nixosGenerate {
-          system = "x86_64-linux";
-          format = "qcow";
-
-          modules = self.nixosConfigurations.node1._module.args.modules ++ [
-            {
-              # Pin nixpkgs to the flake input, so that the packages installed
-              # come from the flake inputs.nixpkgs.url.
-              nix.registry.nixpkgs.flake = nixpkgs;
-              # set disk size to to 20G
-              virtualisation.diskSize = 20 * 1024;
-            }
-
-            # You can add more modules here
-            #./vm-specific-config.nix
-          ];
+        nixosConfigurations = {
+          node1vm = mkNode ./node-configs/node1.nix;
+          node2vm = mkNode ./node-configs/node2.nix;
+          node3vm = mkNode ./node-configs/node3.nix;
         };
-
       };
 }
