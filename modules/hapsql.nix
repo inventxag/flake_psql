@@ -1,116 +1,148 @@
+{ ... }:
 {
-  config,
-  lib,
-  ...
-}:
-let
-  cfg = config.services.hapsql;
-in
-{
-  options.services.hapsql = {
-    enable = lib.mkEnableOption "HA PostgreSQL";
+  flake.modules.nixos.hapsql =
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
+    let
+      cfg = config.services.hapsql;
+    in
+    {
+      options.services.hapsql = {
+        enable = lib.mkEnableOption "HA PostgreSQL";
 
-    postgresqlPackage = lib.mkOption {
-      type = lib.types.package;
-    };
-
-    nodeIp = lib.mkOption {
-      type = lib.types.str;
-    };
-
-    partners = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-    };
-  };
-
-  config = lib.mkIf cfg.enable {
-    # Ensure PostgreSQL data directory exists
-    systemd.tmpfiles.rules = [
-      "d /var/lib/postgresql 0755 postgres postgres -"
-      "d /var/lib/postgresql/15 0700 postgres postgres -"
-    ];
-
-    services.patroni = {
-      enable = true;
-      postgresqlPackage = cfg.postgresqlPackage;
-      name = config.networking.hostName;
-      scope = "my-ha-postgres";
-      nodeIp = cfg.nodeIp;
-
-      settings = {
-        restapi = {
-          connect_address = "${cfg.nodeIp}:8008";
+        postgresqlPackage = lib.mkOption {
+          type = lib.types.package;
+          default = pkgs.postgresql_17;
         };
-        raft = {
-          data_dir = "/var/lib/patroni/raft-${config.services.patroni.scope}";
-          self_addr = "${cfg.nodeIp}:5010";
-          partner_addrs = map (ip: "${ip}:5010") cfg.partners;
+
+        nodeIp = lib.mkOption {
+          type = lib.types.str;
         };
-        bootstrap = {
-          dcs = {
-            ttl = 30;
-            loop_wait = 10;
-            retry_timeout = 10;
-            maximum_lag_on_failover = 1048576;
-            postgresql = {
-              use_pg_rewind = true;
-              use_slots = true;
-              parameters = {
-                wal_level = "replica";
-                hot_standby = "on";
-                max_wal_senders = 10;
-                max_replication_slots = 10;
-                wal_keep_segments = 100;
-                archive_mode = "off";
+
+        partners = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+        };
+      };
+
+      config = lib.mkIf cfg.enable {
+
+        # Enable firewall with comprehensive rules for HA PostgreSQL
+        networking.firewall = {
+          enable = true;
+          # TODO: use ports from patroni config
+          allowedTCPPorts = [
+            5432 # PostgreSQL
+            8008 # Patroni REST API
+            5010 # Patroni Raft consensus
+          ];
+          allowedUDPPorts = [
+            5010 # Patroni Raft consensus (UDP)
+          ];
+        };
+
+        # Ensure PostgreSQL data directory exists
+        # TODO: use path + user/group from patroni config
+        systemd.tmpfiles.rules = [
+          "d /run/postgresql 0700 patroni patroni -"
+          "d /var/lib/postgresql 0755 patroni patroni -"
+          "d /var/lib/postgresql/15 0700 patroni patroni -"
+          "d /var/lib/postgresql/archive 0755 patroni patroni -"
+        ];
+
+        services.patroni = {
+          enable = true;
+          postgresqlPackage = cfg.postgresqlPackage;
+          name = config.networking.hostName;
+          scope = "my-ha-postgres"; # TODO: better name
+          nodeIp = cfg.nodeIp;
+
+          settings = {
+            restapi = {
+              listen = lib.mkForce "0.0.0.0:8008";
+              connect_address = "${cfg.nodeIp}:8008";
+            };
+            raft = {
+              data_dir = "/var/lib/patroni/raft-${config.services.patroni.scope}";
+              self_addr = "${cfg.nodeIp}:5010";
+              partner_addrs = map (ip: "${ip}:5010") cfg.partners;
+            };
+            bootstrap = {
+              dcs = {
+                ttl = 30;
+                loop_wait = 10;
+                retry_timeout = 10;
+                maximum_lag_on_failover = 1048576;
+                postgresql = {
+                  use_pg_rewind = true;
+                  use_slots = true;
+                  parameters = {
+                    wal_level = "replica";
+                    hot_standby = "on";
+                    max_wal_senders = 10;
+                    max_replication_slots = 10;
+                    wal_keep_segments = 100;
+                    archive_mode = "on";
+                    archive_command = "test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f";
+                  };
+                };
+              };
+              initdb = [
+                "encoding=UTF-8"
+                "data-checksums"
+              ];
+              pg_hba = [
+                "host replication replicator 0.0.0.0/0 md5"
+                "host replication replicator ::0/0 md5"
+                "host all all 0.0.0.0/0 md5"
+                "host all all ::0/0 md5"
+              ];
+              # pg_hba = [
+              #   "host replication replicator 127.0.0.1/32 md5"
+              #   "host replication replicator ${cfg.nodeIp} md5"
+
+              # ]
+              # ++ map (ip: "host replication replicator ${ip} md5") cfg.partners
+              # ++ [ "host all all 0.0.0.0/0 md5" ];
+              users = {
+                admin = {
+                  password = "admin"; # TODO: move to secret config
+                  options = [
+                    "createrole"
+                    "createdb"
+                  ];
+                };
               };
             };
-          };
-          initdb = [
-            "encoding=UTF-8"
-            "data-checksums"
-          ];
-          pg_hba = [
-            "host replication replicator 0.0.0.0/0 md5"
-            "host replication replicator ::0/0 md5"
-            "host all all 0.0.0.0/0 md5"
-            "host all all ::0/0 md5"
-          ];
-          users = {
-            admin = {
-              password = "admin"; # TODO: move to secret config
-              options = [
-                "createrole"
-                "createdb"
-              ];
+            postgresql = {
+              listen = "${cfg.nodeIp}:5432";
+              connect_address = "${cfg.nodeIp}:5432";
+              authentication = {
+                replication = {
+                  username = "replicator";
+                  password = "admin@123";
+                };
+                superuser = {
+                  username = "postgres";
+                  password = "admin@123";
+                };
+              };
+              parameters = {
+                listen_addresses = "*";
+                port = 5432;
+              };
+            };
+            tags = {
+              nofailover = false;
+              noloadbalance = false;
+              clonefrom = false;
+              nosync = false;
             };
           };
-        };
-        postgresql = {
-          listen = "${cfg.nodeIp}:5432";
-          connect_address = "${cfg.nodeIp}:5432";
-          authentication = {
-            replication = {
-              username = "replicator";
-              password = "admin@123";
-            };
-            superuser = {
-              username = "postgres";
-              password = "admin@123";
-            };
-          };
-          parameters = {
-            unix_socket_directories = "/tmp";
-            listen_addresses = "*";
-            port = 5432;
-          };
-        };
-        tags = {
-          nofailover = false;
-          noloadbalance = false;
-          clonefrom = false;
-          nosync = false;
         };
       };
     };
-  };
 }

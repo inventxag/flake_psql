@@ -1,5 +1,4 @@
 {
-  lib,
   pkgs,
   ...
 }:
@@ -23,13 +22,13 @@
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [
-      22      # SSH
-      5432    # PostgreSQL
-      8008    # Patroni REST API
-      5010    # Patroni Raft consensus
+      22 # SSH
+      5432 # PostgreSQL
+      8008 # Patroni REST API
+      5010 # Patroni Raft consensus
     ];
     allowedUDPPorts = [
-      5010    # Patroni Raft consensus (UDP)
+      5010 # Patroni Raft consensus (UDP)
     ];
   };
 
