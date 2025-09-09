@@ -8,7 +8,7 @@
       }];
     };
     defaultGateway = "10.0.2.1";
-    firewall.allowedTCPPorts = [ 5010 8008 ];
+    firewall.allowedTCPPorts = [ 5010 8008 5432 ];
   };
 
   services.hapsql = {
