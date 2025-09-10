@@ -100,12 +100,12 @@
         };
 
         nixosConfigurations = {
+          # QEMU configs (Testing)
           node1 = mkNode ./node-configs/node1-qemu.nix;
           node2 = mkNode ./node-configs/node2-qemu.nix;
           node3 = mkNode ./node-configs/node3-qemu.nix;
-        };
-
-        nixosConfigurations = {
+          
+          # VM configs (Deployment)
           node1vm = mkNode ./node-configs/node1.nix;
           node2vm = mkNode ./node-configs/node2.nix;
           node3vm = mkNode ./node-configs/node3.nix;

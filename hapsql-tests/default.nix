@@ -1,5 +1,5 @@
 {
-  name = "Echo Service Test Z";
+  name = "PostgreSQL HA Service Cluster Test";
 
   nodes = {
     psqlnode1 = { config, pkgs, ... }: {

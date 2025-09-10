@@ -51,7 +51,13 @@ in
               use_pg_rewind = true;
               use_slots = true;
               parameters = {
+                wal_level = "replica";
+                hot_standby = "on";
+                max_wal_senders = 10;
+                max_replication_slots = 10;
                 wal_keep_segments = 100;
+                archive_mode = "on";
+                archive_command = "test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f";
               };
             };
           };
