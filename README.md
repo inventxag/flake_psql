@@ -415,3 +415,58 @@ nix run mylib
 * *Fix bugs* If you know how to fix a bug, submit a [pull request](https://github.com/torstenboettjer/flake_psql/pull/new) with your changes.
 * *Improve documentation* If you find the documentation lacking, you can contribute improvements by editing the relevant files.
 
+## Nix Command DocumentationNew version, working patroni and cleaned up config
+
+### Testing the Cluster
+
+**Interactive Test Environment:**
+```bash
+# Build and run the interactive test driver
+nix build .#checks.x86_64-linux.hapsql-tests-interactive
+./result/bin/nixos-test-driver
+```
+
+In the test environment:
+```python
+# Start all 3 nodes
+start_all()
+
+# Check cluster status
+psqlnode1.succeed("curl -s http://localhost:8008/cluster")
+psqlnode1.succeed("curl -s http://localhost:8008/health")
+
+# Test PostgreSQL connectivity
+psqlnode1.succeed("psql -U postgres -c 'SELECT version();'")
+```
+
+**Automated Test Suite:**
+```bash
+# Run the full automated test suite
+nix build .#checks.x86_64-linux.hapsql-tests
+```
+
+### VM Deployment
+
+**Build VM Images:**
+```bash
+# Build all VM images
+nix build .#packages.x86_64-linux.vm1 \
+          .#packages.x86_64-linux.vm2 \
+          .#packages.x86_64-linux.vm3
+
+# Or build individual VMs
+nix build .#nixosConfigurations.node1vm.config.system.build.vm
+nix build .#nixosConfigurations.node2vm.config.system.build.vm  
+nix build .#nixosConfigurations.node3vm.config.system.build.vm
+```
+
+### Explore Available Outputs
+
+```bash
+# See all available flake outputs
+nix flake show
+
+# Check flake evaluation
+nix flake check
+```
+

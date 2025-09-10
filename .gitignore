@@ -7,3 +7,9 @@ result-*
 # Ignore automatically generated direnv output
 .direnv
 
+# Ignore QEMU VM disk images and state
+*.qcow2
+*.pid
+*-vm/
+/tmp/vm-*
+

@@ -24,6 +24,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Ensure PostgreSQL data directory exists
+    systemd.tmpfiles.rules = [
+      "d /var/lib/postgresql 0755 postgres postgres -"
+      "d /var/lib/postgresql/15 0700 postgres postgres -"
+      "d /var/lib/postgresql/archive 0755 postgres postgres -"
+    ];
+
     services.patroni = {
       enable = true;
       postgresqlPackage = cfg.postgresqlPackage;
@@ -33,7 +40,6 @@ in
 
       settings = {
         restapi = {
-          listen = "0.0.0.0:8008";
           connect_address = "${cfg.nodeIp}:8008";
         };
         raft = {
@@ -71,13 +77,6 @@ in
             "host all all 0.0.0.0/0 md5"
             "host all all ::0/0 md5"
           ];
-          # pg_hba = [
-          #   "host replication replicator 127.0.0.1/32 md5"
-          #   "host replication replicator ${cfg.nodeIp} md5"
-
-          # ]
-          # ++ map (ip: "host replication replicator ${ip} md5") cfg.partners
-          # ++ [ "host all all 0.0.0.0/0 md5" ];
           users = {
             admin = {
               password = "admin"; # TODO: move to secret config
@@ -89,6 +88,8 @@ in
           };
         };
         postgresql = {
+          listen = "${cfg.nodeIp}:5432";
+          connect_address = "${cfg.nodeIp}:5432";
           authentication = {
             replication = {
               username = "replicator";
@@ -101,6 +102,8 @@ in
           };
           parameters = {
             unix_socket_directories = "/tmp";
+            listen_addresses = "*";
+            port = 5432;
           };
         };
         tags = {

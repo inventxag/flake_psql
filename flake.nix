@@ -43,7 +43,6 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        config = import config { inherit config; };
 
         # Choose version of PostgreSQL
         postgres = pkgs.postgresql_15;
@@ -71,8 +70,8 @@
             '';
           };
         };
-        checks = config.packages // {
-          hapsql-tests-interactive = config.packages.hapsql-tests.driverInteractive;
+        checks = self.packages.${system} // {
+          hapsql-tests-interactive = self.packages.${system}.hapsql-tests.driverInteractive;
         };
         devShells.default = pkgs.mkShell {
           name = "plpgsql-dev";

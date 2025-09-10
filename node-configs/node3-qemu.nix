@@ -2,7 +2,7 @@
   networking.hostName = "node3";
 
   services.hapsql = {
-    nodeIp = "10.0.2.17";
-    partners = [ "10.0.2.15" "10.0.2.16" ];
+    nodeIp = "192.168.100.12";
+    partners = [ "192.168.100.10" "192.168.100.11" ];
   };
 }

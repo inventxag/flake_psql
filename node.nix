@@ -7,6 +7,18 @@
   system.stateVersion = "25.11";
   nixpkgs.hostPlatform = "x86_64-linux";
 
+  # Filesystem configuration for VM builds
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
+
+  # Boot loader configuration
+  boot.loader.grub = {
+    enable = true;
+    device = "/dev/vda"; # For QEMU VMs
+  };
+
   # Enable firewall with comprehensive rules for HA PostgreSQL
   networking.firewall = {
     enable = true;
@@ -19,8 +31,6 @@
     allowedUDPPorts = [
       5010    # Patroni Raft consensus (UDP)
     ];
-    # Allow ICMP for ping
-    allowedICMPTypes = [ "echo-request" "echo-reply" ];
   };
 
   users.users.root.password = "root";
