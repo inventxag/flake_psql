@@ -415,7 +415,7 @@ nix run mylib
 * *Fix bugs* If you know how to fix a bug, submit a [pull request](https://github.com/torstenboettjer/flake_psql/pull/new) with your changes.
 * *Improve documentation* If you find the documentation lacking, you can contribute improvements by editing the relevant files.
 
-## Nix Command DocumentationNew version, working patroni and cleaned up config
+## Native Nix Commands
 
 ### Testing the Cluster
 
