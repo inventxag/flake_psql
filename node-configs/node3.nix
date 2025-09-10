@@ -8,7 +8,7 @@
       }];
     };
     defaultGateway = "10.0.2.1";
-    firewall.allowedTCPPorts = [ 5010 8008 5432 ];
+    # Firewall rules are inherited from base node.nix
   };
 
   services.hapsql = {

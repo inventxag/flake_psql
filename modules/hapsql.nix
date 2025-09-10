@@ -33,7 +33,7 @@ in
 
       settings = {
         restapi = {
-          #listen = "0.0.0.0:8008";
+          listen = "0.0.0.0:8008";
           connect_address = "${cfg.nodeIp}:8008";
         };
         raft = {
