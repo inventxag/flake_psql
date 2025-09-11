@@ -1,6 +1,8 @@
 import json
 import time
 
+nodes = dict(psqlnode1=psqlnode1, psqlnode2=psqlnode2, psqlnode3=psqlnode3)
+
 def wait_for_patroni_ready(node, timeout=60):
   """Wait for Patroni to be ready and responsive"""
   node.wait_for_unit("patroni.service", timeout=timeout)
@@ -14,7 +16,7 @@ def get_cluster_info(node):
 
 def get_leader_node():
   """Find which node is the current leader"""
-  for node in [psqlnode1, psqlnode2, psqlnode3]:
+  for node in nodes.values():
       try:
           cluster_info = get_cluster_info(node)
           for member in cluster_info.get("members", []):
@@ -27,15 +29,17 @@ def get_leader_node():
 def execute_sql_on_leader(sql_command):
   """Execute SQL command on the current leader"""
   leader_name = get_leader_node()
-  node = dict(psqlnode1=psqlnode1, psqlnode2=psqlnode2, psqlnode3=psqlnode3)[leader_name]
+  node = nodes[leader_name]
   if node:
       return node.succeed(f'psql -U postgres -c "{sql_command}"')
   else:
       raise Exception("No leader found!")
 
-def verify_replication(table_name, expected_data):
+def verify_replication(table_name, expected_data, exclude_node=None):
   """Verify data is replicated across all nodes"""
-  for node in [psqlnode1, psqlnode2, psqlnode3]:
+  for node in nodes.values():
+      if node == exclude_node:
+          continue
       result = node.succeed(f'psql -U postgres -c "SELECT * FROM {table_name};" -t')
       assert expected_data in result, f"Data not replicated to {node.name}"
       print(f"✅ {node.name}: Replication verified")
@@ -47,7 +51,7 @@ with subtest("Start all VMs and wait for services"):
   start_all()
 
   # Wait for network and Patroni on all nodes
-  for node in [psqlnode1, psqlnode2, psqlnode3]:
+  for node in nodes.values():
       node.systemctl("start network-online.target")
       node.wait_for_unit("network-online.target")
       wait_for_patroni_ready(node)
@@ -71,7 +75,7 @@ with subtest("Verify Patroni cluster formation and leader election"):
   followers_count = 0
 
   # Check cluster status from each node
-  for node in [psqlnode1, psqlnode2, psqlnode3]:
+  for node in nodes.values():
       cluster_info = get_cluster_info(node)
       print(f"{node.name} cluster info: {json.dumps(cluster_info, indent=2)}")
 
@@ -113,7 +117,7 @@ with subtest("Test data replication across cluster"):
 
 # === PHASE 6: PATRONI REST API ===
 with subtest("Test Patroni REST API functionality"):
-  for node in [psqlnode1, psqlnode2, psqlnode3]:
+  for node in nodes.values():
       # Test health endpoint
       node.succeed("curl -f http://localhost:8008/health")
 
@@ -132,15 +136,9 @@ with subtest("Test automatic failover"):
   print(f"Original leader: {original_leader}")
 
   # Stop Patroni on the current leader
-  if original_leader == "psqlnode1":
-      psqlnode1.succeed("systemctl stop patroni")
-      print("Stopped Patroni on psqlnode1")
-  elif original_leader == "psqlnode2":
-      psqlnode2.succeed("systemctl stop patroni")
-      print("Stopped Patroni on psqlnode2")
-  elif original_leader == "psqlnode3":
-      psqlnode3.succeed("systemctl stop patroni")
-      print("Stopped Patroni on psqlnode3")
+  original_leader_node = nodes[original_leader]
+  original_leader_node.succeed("systemctl stop patroni")
+  print(f"Stopped Patroni on {original_leader}")
 
   # Wait for failover (Patroni typically takes 30-60 seconds)
   print("Waiting for failover...")
@@ -155,27 +153,21 @@ with subtest("Test automatic failover"):
   # Verify database is still accessible
   execute_sql_on_leader("INSERT INTO ha_test (id, message) VALUES (3, 'Post-failover test');")
   time.sleep(5)
-  verify_replication("ha_test", "Post-failover test")
+  # Exclude original leader node from verify_replication, because patroni/postgres isn't running yet
+  verify_replication("ha_test", "Post-failover test", original_leader_node)
   print("✅ Database operations work after failover")
 
 # === PHASE 8: RECOVERY ===
 with subtest("Test node recovery and rejoin"):
   # Restart the stopped node
-  if original_leader == "psqlnode1":
-      psqlnode1.succeed("systemctl start patroni")
-      wait_for_patroni_ready(psqlnode1)
-  elif original_leader == "psqlnode2":
-      psqlnode2.succeed("systemctl start patroni")
-      wait_for_patroni_ready(psqlnode2)
-  elif original_leader == "psqlnode3":
-      psqlnode3.succeed("systemctl start patroni")
-      wait_for_patroni_ready(psqlnode3)
+  original_leader_node.succeed("systemctl start patroni")
+  wait_for_patroni_ready(original_leader_node)
 
   # Wait for the node to rejoin as follower
   time.sleep(15)
 
   # Verify the recovered node rejoined as follower
-  cluster_info = get_cluster_info(psqlnode1)
+  cluster_info = get_cluster_info(original_leader_node)
   member_count = len(cluster_info.get("members", []))
   assert member_count == 3, f"Expected 3 members, found {member_count}"
   print(f"✅ Node {original_leader} successfully rejoined as follower")
